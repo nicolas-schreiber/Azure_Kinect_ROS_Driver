@@ -35,7 +35,18 @@ void K4ACalibrationTransformData::initialize(const k4a::playback& k4a_playback_h
 }
 
 void K4ACalibrationTransformData::initialize(const K4AROSDeviceParams params)
-{
+{ 
+  if (params.downscale_img_before_pointcloud) {
+    memcpy(&k4a_calibration_downscaled_, &k4a_calibration_, sizeof(k4a::calibration));
+    k4a_calibration_downscaled_.color_camera_calibration.resolution_width /= 2;
+    k4a_calibration_downscaled_.color_camera_calibration.resolution_height /= 2;
+    k4a_calibration_downscaled_.color_camera_calibration.intrinsics.parameters.param.cx /= 2;
+    k4a_calibration_downscaled_.color_camera_calibration.intrinsics.parameters.param.cy /= 2;
+    k4a_calibration_downscaled_.color_camera_calibration.intrinsics.parameters.param.fx /= 2;
+    k4a_calibration_downscaled_.color_camera_calibration.intrinsics.parameters.param.fy /= 2;
+    k4a_transformation_downscaled_ = k4a::transformation(k4a_calibration_downscaled_);
+  }
+
   k4a_transformation_ = k4a::transformation(k4a_calibration_);
   tf_prefix_ = params.tf_prefix;
 
@@ -50,21 +61,32 @@ void K4ACalibrationTransformData::initialize(const K4AROSDeviceParams params)
     point_cloud_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getDepthWidth(), getDepthHeight(),
                                             getDepthWidth() * 3 * (int) sizeof(DepthPixel));
   }
+  else if (params.point_cloud && params.rgb_point_cloud && params.downscale_img_before_pointcloud)
+  {
+    point_cloud_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getColorWidth()/2, getColorHeight()/2,
+                                            getColorWidth()/2 * 3 * (int) sizeof(DepthPixel));
+  }
   else if (params.point_cloud && params.rgb_point_cloud)
   {
     point_cloud_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getColorWidth(), getColorHeight(),
                                             getColorWidth() * 3 * (int) sizeof(DepthPixel));
   }
 
+
   if (depthEnabled && colorEnabled)
   {
     // Create a buffer to store RGB images that are transformed into the depth camera geometry
     transformed_rgb_image_ = k4a::image::create(K4A_IMAGE_FORMAT_COLOR_BGRA32, getDepthWidth(), getDepthHeight(),
                                                 getDepthWidth() * (int) sizeof(BgraPixel));
-
+    
     // Create a buffer to store depth images that are transformed into the RGB camera geometry
-    transformed_depth_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getColorWidth(), getColorHeight(),
+    if(params.downscale_img_before_pointcloud) {
+      transformed_depth_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getColorWidth() / 2, getColorHeight() / 2,
+                                                  getColorWidth()/2 * (int) sizeof(DepthPixel));
+    } else {
+      transformed_depth_image_ = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16, getColorWidth(), getColorHeight(),
                                                   getColorWidth() * (int) sizeof(DepthPixel));
+    }
   }
 
   // Publish various transforms needed by ROS.

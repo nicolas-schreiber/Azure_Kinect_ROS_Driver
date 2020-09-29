@@ -39,7 +39,9 @@ public:
   void print();
 
   k4a::calibration k4a_calibration_;
+  k4a::calibration k4a_calibration_downscaled_;
   k4a::transformation k4a_transformation_;
+  k4a::transformation k4a_transformation_downscaled_;
 
   k4a::image point_cloud_image_;
   k4a::image transformed_rgb_image_;

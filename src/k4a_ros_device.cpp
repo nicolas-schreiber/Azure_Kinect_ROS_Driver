@@ -173,6 +173,8 @@ K4AROSDevice::K4AROSDevice(const NodeHandle& n, const NodeHandle& p)
         {
           k4a_device_ = std::move(device);
           break;
+        } else {
+          device.close();
         }
       }
       // Pick the first device
@@ -497,6 +499,59 @@ k4a_result_t K4AROSDevice::renderBGRA32ToROS(sensor_msgs::ImagePtr& rgb_image, k
   return K4A_RESULT_SUCCEEDED;
 }
 
+k4a::image K4AROSDevice::downscaleImage2x2Binning(const k4a::image color_image)
+{
+    int color_image_width_pixels = color_image.get_width_pixels();
+    int color_image_height_pixels = color_image.get_height_pixels();
+    int color_image_downscaled_width_pixels = color_image_width_pixels / 2;
+    int color_image_downscaled_height_pixels = color_image_height_pixels / 2;
+    k4a_image_t color_image_downscaled = NULL;
+
+    
+    if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_COLOR_BGRA32,
+                                                 color_image_downscaled_width_pixels,
+                                                 color_image_downscaled_height_pixels,
+                                                 color_image_downscaled_width_pixels * 4 * (int)sizeof(uint8_t),
+                                                 &color_image_downscaled))
+    {
+        printf("Failed to create downscaled color image\n");
+        return k4a::image(color_image_downscaled);
+    }
+
+    const uint8_t *color_image_data = color_image.get_buffer();
+    uint8_t *color_image_downscaled_data = k4a_image_get_buffer(color_image_downscaled);
+    for (int j = 0; j < color_image_downscaled_height_pixels; j++)
+    {
+        for (int i = 0; i < color_image_downscaled_width_pixels; i++)
+        {
+            int index_downscaled = j * color_image_downscaled_width_pixels + i;
+            int index_tl = (j * 2 + 0) * color_image_width_pixels + i * 2 + 0;
+            int index_tr = (j * 2 + 0) * color_image_width_pixels + i * 2 + 1;
+            int index_bl = (j * 2 + 1) * color_image_width_pixels + i * 2 + 0;
+            int index_br = (j * 2 + 1) * color_image_width_pixels + i * 2 + 1;
+
+            color_image_downscaled_data[4 * index_downscaled + 0] = (uint8_t)(
+                (color_image_data[4 * index_tl + 0] + color_image_data[4 * index_tr + 0] +
+                 color_image_data[4 * index_bl + 0] + color_image_data[4 * index_br + 0]) /
+                4.0f);
+            color_image_downscaled_data[4 * index_downscaled + 1] = (uint8_t)(
+                (color_image_data[4 * index_tl + 1] + color_image_data[4 * index_tr + 1] +
+                 color_image_data[4 * index_bl + 1] + color_image_data[4 * index_br + 1]) /
+                4.0f);
+            color_image_downscaled_data[4 * index_downscaled + 2] = (uint8_t)(
+                (color_image_data[4 * index_tl + 2] + color_image_data[4 * index_tr + 2] +
+                 color_image_data[4 * index_bl + 2] + color_image_data[4 * index_br + 2]) /
+                4.0f);
+            color_image_downscaled_data[4 * index_downscaled + 3] = (uint8_t)(
+                (color_image_data[4 * index_tl + 3] + color_image_data[4 * index_tr + 3] +
+                 color_image_data[4 * index_bl + 3] + color_image_data[4 * index_br + 3]) /
+                4.0f);
+        }
+    }
+
+    return k4a::image(color_image_downscaled);
+}
+
 k4a_result_t K4AROSDevice::getRgbPointCloudInDepthFrame(const k4a::capture& capture,
                                                         sensor_msgs::PointCloud2Ptr& point_cloud)
 {
@@ -547,13 +602,24 @@ k4a_result_t K4AROSDevice::getRgbPointCloudInRgbFrame(const k4a::capture& captur
     return K4A_RESULT_FAILED;
   }
 
-  // transform depth image into color camera geometry
-  calibration_data_.k4a_transformation_.depth_image_to_color_camera(k4a_depth_frame,
-                                                                    &calibration_data_.transformed_depth_image_);
+  if(params_.downscale_img_before_pointcloud) {
+    k4a_bgra_frame = downscaleImage2x2Binning(k4a_bgra_frame);
 
-  // Tranform depth image to point cloud (note that this is now from the perspective of the color camera)
-  calibration_data_.k4a_transformation_.depth_image_to_point_cloud(
-      calibration_data_.transformed_depth_image_, K4A_CALIBRATION_TYPE_COLOR, &calibration_data_.point_cloud_image_);
+    // transform depth image into color camera geometry
+    calibration_data_.k4a_transformation_downscaled_.depth_image_to_color_camera(k4a_depth_frame, &calibration_data_.transformed_depth_image_);
+
+    // Tranform depth image to point cloud (note that this is now from the perspective of the color camera)
+    calibration_data_.k4a_transformation_downscaled_.depth_image_to_point_cloud(calibration_data_.transformed_depth_image_, K4A_CALIBRATION_TYPE_COLOR, &calibration_data_.point_cloud_image_);
+
+  } else {
+    // transform depth image into color camera geometry
+    calibration_data_.k4a_transformation_.depth_image_to_color_camera(k4a_depth_frame, &calibration_data_.transformed_depth_image_);
+
+    // Tranform depth image to point cloud (note that this is now from the perspective of the color camera)
+    calibration_data_.k4a_transformation_.depth_image_to_point_cloud(
+        calibration_data_.transformed_depth_image_, K4A_CALIBRATION_TYPE_COLOR, &calibration_data_.point_cloud_image_);
+  }
+
 
   point_cloud->header.frame_id = calibration_data_.tf_prefix_ + calibration_data_.rgb_camera_frame_;
   point_cloud->header.stamp = timestampToROS(k4a_depth_frame.get_device_timestamp());
