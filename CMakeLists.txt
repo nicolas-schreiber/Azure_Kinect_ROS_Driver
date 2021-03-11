@@ -23,6 +23,16 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
 )
 
+
+### CUDA ###
+find_package(CUDA REQUIRED)
+
+set(CUDA_NVCC_FLAGS "-arch=compute_30" CACHE STRING "nvcc flags" FORCE)
+set (CUDA_VERBOSE_BUILD ON CACHE BOOL "nvcc verbose" FORCE)
+set(LIB_TYPE STATIC) 
+### 
+
+
 ###################################
 ## catkin specific configuration ##
 ###################################
@@ -43,6 +53,9 @@ catkin_package(
 ## Build ##
 ###########
 
+cuda_add_library(k4a_ros_device_cuda SHARED
+    src/k4a_ros_device.cu
+)
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
@@ -52,7 +65,7 @@ add_executable(${PROJECT_NAME}_node
   src/k4a_ros_device.cpp
   src/k4a_ros_device_params.cpp
   src/k4a_calibration_transform_data.cpp
-  )
+)
 
 target_compile_features(${PROJECT_NAME}_node PUBLIC cxx_std_11)
 
@@ -117,11 +130,13 @@ include_directories(
 target_link_libraries(${PROJECT_NAME}_node
   ${K4A_LIBS}
   ${catkin_LIBRARIES}
+  k4a_ros_device_cuda
 )
 
 target_link_libraries(${PROJECT_NAME}_nodelet
   ${K4A_LIBS}
   ${catkin_LIBRARIES}
+  k4a_ros_device_cuda
 )
 
 #############

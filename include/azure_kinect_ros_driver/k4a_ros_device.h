@@ -176,4 +176,8 @@ class K4AROSDevice
 
 void printTimestampDebugMessage(const std::string& name, const ros::Time& timestamp);
 
+// CUDA
+void cudaFillColorPointCloud(const k4a::image& pointcloud_image, const k4a::image& color_image, sensor_msgs::PointCloud2Ptr& point_cloud);
+void cudaFillPointCloud(const k4a::image& pointcloud_image, sensor_msgs::PointCloud2Ptr& point_cloud);
+
 #endif  // K4A_ROS_DEVICE_H

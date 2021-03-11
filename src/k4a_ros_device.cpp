@@ -601,43 +601,9 @@ k4a_result_t K4AROSDevice::fillColorPointCloud(const k4a::image& pointcloud_imag
 
   sensor_msgs::PointCloud2Modifier pcd_modifier(*point_cloud);
   pcd_modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
-
-  sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud, "x");
-  sensor_msgs::PointCloud2Iterator<float> iter_y(*point_cloud, "y");
-  sensor_msgs::PointCloud2Iterator<float> iter_z(*point_cloud, "z");
-
-  sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(*point_cloud, "r");
-  sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*point_cloud, "g");
-  sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*point_cloud, "b");
-
   pcd_modifier.resize(point_count);
 
-  const int16_t* point_cloud_buffer = reinterpret_cast<const int16_t*>(pointcloud_image.get_buffer());
-  const uint8_t* color_buffer = color_image.get_buffer();
-
-  for (size_t i = 0; i < point_count; i++, ++iter_x, ++iter_y, ++iter_z, ++iter_r, ++iter_g, ++iter_b)
-  {
-    // Z in image frame:
-    float z = static_cast<float>(point_cloud_buffer[3 * i + 2]);
-    // Alpha value:
-    uint8_t a = color_buffer[4 * i + 3];
-    if (z <= 0.0f || a == 0)
-    {
-      *iter_x = *iter_y = *iter_z = std::numeric_limits<float>::quiet_NaN();
-      *iter_r = *iter_g = *iter_b = 0;
-    }
-    else
-    {
-      constexpr float kMillimeterToMeter = 1.0 / 1000.0f;
-      *iter_x = kMillimeterToMeter * static_cast<float>(point_cloud_buffer[3 * i + 0]);
-      *iter_y = kMillimeterToMeter * static_cast<float>(point_cloud_buffer[3 * i + 1]);
-      *iter_z = kMillimeterToMeter * z;
-
-      *iter_r = color_buffer[4 * i + 2];
-      *iter_g = color_buffer[4 * i + 1];
-      *iter_b = color_buffer[4 * i + 0];
-    }
-  }
+  cudaFillColorPointCloud(pointcloud_image, color_image, point_cloud);
 
   return K4A_RESULT_SUCCEEDED;
 }
@@ -653,31 +619,9 @@ k4a_result_t K4AROSDevice::fillPointCloud(const k4a::image& pointcloud_image, se
 
   sensor_msgs::PointCloud2Modifier pcd_modifier(*point_cloud);
   pcd_modifier.setPointCloud2FieldsByString(1, "xyz");
-
-  sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud, "x");
-  sensor_msgs::PointCloud2Iterator<float> iter_y(*point_cloud, "y");
-  sensor_msgs::PointCloud2Iterator<float> iter_z(*point_cloud, "z");
-
   pcd_modifier.resize(point_count);
 
-  const int16_t* point_cloud_buffer = reinterpret_cast<const int16_t*>(pointcloud_image.get_buffer());
-
-  for (size_t i = 0; i < point_count; i++, ++iter_x, ++iter_y, ++iter_z)
-  {
-    float z = static_cast<float>(point_cloud_buffer[3 * i + 2]);
-
-    if (z <= 0.0f)
-    {
-      *iter_x = *iter_y = *iter_z = std::numeric_limits<float>::quiet_NaN();
-    }
-    else
-    {
-      constexpr float kMillimeterToMeter = 1.0 / 1000.0f;
-      *iter_x = kMillimeterToMeter * static_cast<float>(point_cloud_buffer[3 * i + 0]);
-      *iter_y = kMillimeterToMeter * static_cast<float>(point_cloud_buffer[3 * i + 1]);
-      *iter_z = kMillimeterToMeter * z;
-    }
-  }
+  cudaFillPointCloud(pointcloud_image, point_cloud);
 
   return K4A_RESULT_SUCCEEDED;
 }
